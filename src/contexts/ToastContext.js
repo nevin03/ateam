@@ -8,7 +8,6 @@ export let toast = {
   info: () => {},
   warning: () => {},
 };
-//exp
 export const setToastMethods = (methods) => {
   toast = { ...methods };
 };
