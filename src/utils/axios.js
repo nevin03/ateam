@@ -1,7 +1,6 @@
 import axios from "axios";
-import { ToastContextRef } from "@/contexts/ToastProvider";
-
-// Create Axios instance
+import useAuthStore from "../store/useAuthStore";
+import { toast } from "@/contexts/ToastContext";
 const axiosInstance = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
   timeout: 10000,
@@ -10,24 +9,9 @@ const axiosInstance = axios.create({
   },
 });
 
-let isRefreshing = false;
-let failedQueue = [];
-
-const processQueue = (error, token = null) => {
-  failedQueue.forEach((prom) => {
-    if (error) {
-      prom.reject(error);
-    } else {
-      prom.resolve(token);
-    }
-  });
-  failedQueue = [];
-};
-
-// Request interceptor to add token
 axiosInstance.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("token");
+    const { token } = useAuthStore.getState();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -36,14 +20,25 @@ axiosInstance.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response interceptor to handle errors
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+  failedQueue.forEach((prom) => {
+    error ? prom.reject(error) : prom.resolve(token);
+  });
+  failedQueue = [];
+};
+
 axiosInstance.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
     const status = error.response?.status;
-    const message = error.response?.data?.message || "Something went wrong";
 
+    const authStore = useAuthStore.getState();
+
+    // Handle 401 and token refresh
     if (status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
@@ -61,44 +56,39 @@ axiosInstance.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        const refreshToken = localStorage.getItem("refreshToken");
-        const response = await axios.post(
-          `${import.meta.env.VITE_API_BASE_URL}/auth/refresh`,
-          { refreshToken }
-        );
+        const res = await axios.post("/auth/refresh", {
+          refreshToken: authStore.refreshToken,
+        });
 
-        const newToken = response.data.accessToken;
+        const { accessToken, refreshToken } = res.data;
 
-        localStorage.setItem("token", newToken);
-        axiosInstance.defaults.headers.Authorization = `Bearer ${newToken}`;
+        // Save new tokens to Zustand
+        useAuthStore.setState({
+          token: accessToken,
+          refreshToken,
+          isAuthenticated: true,
+        });
 
-        processQueue(null, newToken);
+        processQueue(null, accessToken);
 
-        originalRequest.headers.Authorization = `Bearer ${newToken}`;
+        originalRequest.headers.Authorization = `Bearer ${accessToken}`;
         return axiosInstance(originalRequest);
-      } catch (refreshError) {
-        processQueue(refreshError, null);
-        ToastContextRef.error("Session expired. Please log in again.");
-        localStorage.removeItem("token");
-        localStorage.removeItem("refreshToken");
-
-        setTimeout(() => {
-          window.location.href = "/login";
-        }, 1500);
-
-        return Promise.reject(refreshError);
+      } catch (err) {
+        processQueue(err, null);
+        useAuthStore.getState().logout?.();
+        toast?.error?.("Session expired. Please login again.");
+        setTimeout(() => (window.location.href = "/login"), 1000);
+        return Promise.reject(err);
       } finally {
         isRefreshing = false;
       }
     }
 
-    // Handle 403 or other errors
+    // 403
     if (status === 403) {
-      ToastContextRef.error(
-        "You don't have permission to perform this action."
-      );
+      toast?.error?.("You don’t have permission to perform this action.");
     } else {
-      ToastContextRef.error(message);
+      toast?.error?.(error.response?.data?.message || "Something went wrong");
     }
 
     return Promise.reject(error);
