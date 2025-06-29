@@ -24,5 +24,6 @@ dist-ssr
 *.sw?
 
 
+src/assets
+src/components/Test/
 
-/src
