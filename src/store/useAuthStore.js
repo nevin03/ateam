@@ -9,22 +9,22 @@ const useAuthStore = create(
       refreshToken: null,
       isAuthenticated: false,
 
-      login: ({ user, token, refreshToken }) => {
-        set(() => ({
+      login: ({ user, accessToken, refreshToken }) =>
+        set({
           user,
-          token,
+          token: accessToken,
           refreshToken,
           isAuthenticated: true,
-        }));
-      },
+        }),
 
       logout: () => {
-        set(() => ({
+        set({
           user: null,
           token: null,
           refreshToken: null,
           isAuthenticated: false,
-        }));
+        });
+        localStorage.setItem("logout-event", Date.now());
       },
     }),
     {
