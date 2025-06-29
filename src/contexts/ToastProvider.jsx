@@ -13,7 +13,6 @@ export const ToastProvider = ({ children }) => {
     }, duration);
   };
 
-  // ✅ Set global methods once on mount
   setToastMethods({
     success: (msg, duration) => showToast(msg, "success", duration),
     error: (msg, duration) => showToast(msg, "error", duration),
