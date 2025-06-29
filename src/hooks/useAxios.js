@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import axiosInstance from "@utils/axios";
-import { useToast } from "@/hooks/useToast";
+import axiosInstance from "../utils/axios";
+import axios from "axios";
 
 export const useAxios = ({
   url,
@@ -8,11 +8,11 @@ export const useAxios = ({
   data = null,
   params = null,
   autoFetch = true,
+  onCompleted = null,
 }) => {
   const [response, setResponse] = useState(null);
   const [loading, setLoading] = useState(autoFetch);
   const [error, setError] = useState(null);
-  const toast = useToast();
 
   const controllerRef = useRef(null);
 
@@ -31,24 +31,21 @@ export const useAxios = ({
 
       setResponse(result.data);
       setError(null);
+      if (onCompleted) onCompleted(result.data);
     } catch (err) {
-      if (axiosInstance.isCancel(err)) {
+      if (axios.isCancel(err)) {
         console.log("Request canceled", err.message);
       } else {
         setError(err);
-        toast.error(err?.response?.data?.message || "Something went wrong");
       }
     } finally {
       setLoading(false);
     }
-  }, [url, method, data, params, toast]);
+  }, [url, method, data, params, onCompleted]);
 
   useEffect(() => {
     if (autoFetch) fetchData();
-
-    return () => {
-      if (controllerRef.current) controllerRef.current.abort();
-    };
+    return () => controllerRef.current?.abort();
   }, [fetchData, autoFetch]);
 
   return { response, loading, error, refetch: fetchData };
