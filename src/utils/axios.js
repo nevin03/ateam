@@ -10,7 +10,6 @@ const axiosInstance = axios.create({
   },
 });
 
-// Track if a refresh is in progress
 let isRefreshing = false;
 let failedQueue = [];
 
@@ -96,7 +95,7 @@ axiosInstance.interceptors.response.use(
     // Handle 403 or other errors
     if (status === 403) {
       toastController.error(
-        "You don’t have permission to perform this action."
+        "You don't have permission to perform this action."
       );
     } else {
       toastController.error(message);
