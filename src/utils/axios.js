@@ -1,5 +1,5 @@
 import axios from "axios";
-import { toastController } from "@contexts/ToastProvider";
+import { ToastContextRef } from "@/contexts/ToastProvider";
 
 // Create Axios instance
 const axiosInstance = axios.create({
@@ -78,7 +78,7 @@ axiosInstance.interceptors.response.use(
         return axiosInstance(originalRequest);
       } catch (refreshError) {
         processQueue(refreshError, null);
-        toastController.error("Session expired. Please log in again.");
+        ToastContextRef.error("Session expired. Please log in again.");
         localStorage.removeItem("token");
         localStorage.removeItem("refreshToken");
 
@@ -94,11 +94,11 @@ axiosInstance.interceptors.response.use(
 
     // Handle 403 or other errors
     if (status === 403) {
-      toastController.error(
+      ToastContextRef.error(
         "You don't have permission to perform this action."
       );
     } else {
-      toastController.error(message);
+      ToastContextRef.error(message);
     }
 
     return Promise.reject(error);

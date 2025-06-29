@@ -11,9 +11,11 @@ import Chip from "@components/Chip";
 import { Tabs } from "@components/Tabs";
 import useAuthStore from "./store/useAuthStore";
 import { useModal } from "@components/Modal/useModal";
+import { useToast } from "./hooks/useToast";
 
 function App() {
   const { login, logout } = useAuthStore();
+  const { success } = useToast();
 
   const {
     ModalUI: SimpleModal,
@@ -117,13 +119,13 @@ function App() {
       <Button color="primary" variant="contained">
         Primary
       </Button>
-      <Button color="secondary" variant="contained" rounded="lg">
+      <Button color="secondary" variant="rounded" rounded="lg">
         Secondary Rounded
       </Button>
       <Button color="tertiary" variant="text">
         Tertiary Text
       </Button>
-
+      <Button onClick={() => success("success")}>Toast</Button>
       <Input id="nameInApp" placeholder="Please enter your name" />
 
       <Select

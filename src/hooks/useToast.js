@@ -1,12 +1,9 @@
 import { useContext } from "react";
-import { ToastContextRef } from "@contexts/ToastProvider";
+import { ToastContext } from "@/contexts/ToastContext";
 
 export const useToast = () => {
-  const context = useContext(ToastContextRef);
-  if (!context)
-    throw new Error(
-      "useToast must be used within ToastProvider add a provider wrap <ToastProvider>( it is in contexts folder)"
-    );
+  const context = useContext(ToastContext);
+  if (!context) throw new Error("useToast must be used inside <ToastProvider>");
 
   return {
     showToast: context.showToast,
