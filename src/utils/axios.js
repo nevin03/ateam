@@ -1,6 +1,5 @@
 import axios from "axios";
 import useAuthStore from "@/store/useAuthStore";
-import { toast } from "@/contexts/ToastContext";
 
 const axiosInstance = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
@@ -11,7 +10,6 @@ const axiosInstance = axios.create({
   },
 });
 
-// ✅ Attach token to each request
 axiosInstance.interceptors.request.use(
   (config) => {
     const { token } = useAuthStore.getState();
@@ -20,13 +18,9 @@ axiosInstance.interceptors.request.use(
     }
     return config;
   },
-  (error) => {
-    toast.error("Request error");
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
-// Refresh token logic
 let isRefreshing = false;
 let refreshSubscribers = [];
 
@@ -40,16 +34,17 @@ axiosInstance.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
     const status = error.response?.status;
-
-    if (status === 401 && !originalRequest._retry) {
+    if (
+      status === 401 &&
+      !originalRequest._retry &&
+      !originalRequest.skipRefresh
+    ) {
       originalRequest._retry = true;
 
       const { refreshToken } = useAuthStore.getState();
-
       if (!refreshToken) {
-        toast.error("Session expired. Please login again.");
         useAuthStore.getState().logout?.();
-        return Promise.reject("Session expired");
+        return Promise.reject(new Error("Session expired"));
       }
 
       if (isRefreshing) {
@@ -81,18 +76,15 @@ axiosInstance.interceptors.response.use(
 
         originalRequest.headers.Authorization = `Bearer ${access_token}`;
         return axiosInstance(originalRequest);
-      } catch (err) {
-        toast.error("Token refresh failed. Please login again.", err);
+      } catch {
         useAuthStore.getState().logout?.();
-        return Promise.reject("Session expired");
+        return Promise.reject(new Error("Token refresh failed"));
       } finally {
         isRefreshing = false;
       }
     }
 
-    const errMsg = error.response?.data?.message || "Something went wrong";
-    toast.error(errMsg); // ✅ Show API/server errors to user
-    return Promise.reject(errMsg);
+    return Promise.reject(error);
   }
 );
 
