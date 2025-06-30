@@ -1,14 +1,17 @@
 import axios from "axios";
-import useAuthStore from "../store/useAuthStore";
+import useAuthStore from "@/store/useAuthStore";
 import { toast } from "@/contexts/ToastContext";
+
 const axiosInstance = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
   timeout: 10000,
   headers: {
     "Content-Type": "application/json",
+    Accept: "application/json",
   },
 });
 
+// ✅ Attach token to each request
 axiosInstance.interceptors.request.use(
   (config) => {
     const { token } = useAuthStore.getState();
@@ -17,17 +20,19 @@ axiosInstance.interceptors.request.use(
     }
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => {
+    toast.error("Request error");
+    return Promise.reject(error);
+  }
 );
 
+// Refresh token logic
 let isRefreshing = false;
-let failedQueue = [];
+let refreshSubscribers = [];
 
-const processQueue = (error, token = null) => {
-  failedQueue.forEach((prom) => {
-    error ? prom.reject(error) : prom.resolve(token);
-  });
-  failedQueue = [];
+const onTokenRefreshed = (newToken) => {
+  refreshSubscribers.forEach((callback) => callback(newToken));
+  refreshSubscribers = [];
 };
 
 axiosInstance.interceptors.response.use(
@@ -36,62 +41,58 @@ axiosInstance.interceptors.response.use(
     const originalRequest = error.config;
     const status = error.response?.status;
 
-    const authStore = useAuthStore.getState();
-
-    // Handle 401 and token refresh
     if (status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
+      const { refreshToken } = useAuthStore.getState();
+
+      if (!refreshToken) {
+        toast.error("Session expired. Please login again.");
+        useAuthStore.getState().logout?.();
+        return Promise.reject("Session expired");
+      }
+
       if (isRefreshing) {
-        return new Promise((resolve, reject) => {
-          failedQueue.push({ resolve, reject });
-        })
-          .then((token) => {
-            originalRequest.headers.Authorization = `Bearer ${token}`;
-            return axiosInstance(originalRequest);
-          })
-          .catch((err) => Promise.reject(err));
+        return new Promise((resolve) => {
+          refreshSubscribers.push((newToken) => {
+            originalRequest.headers.Authorization = `Bearer ${newToken}`;
+            resolve(axiosInstance(originalRequest));
+          });
+        });
       }
 
       isRefreshing = true;
 
       try {
-        const res = await axios.post("/auth/refresh", {
-          refreshToken: authStore.refreshToken,
-        });
+        const res = await axios.post(
+          `${import.meta.env.VITE_API_BASE_URL}/auth/refresh`,
+          { refreshToken }
+        );
 
-        const { accessToken, refreshToken } = res.data;
+        const { access_token, refresh_token } = res.data;
 
-        // Save new tokens to Zustand
         useAuthStore.setState({
-          token: accessToken,
-          refreshToken,
+          token: access_token,
+          refreshToken: refresh_token,
           isAuthenticated: true,
         });
 
-        processQueue(null, accessToken);
+        onTokenRefreshed(access_token);
 
-        originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+        originalRequest.headers.Authorization = `Bearer ${access_token}`;
         return axiosInstance(originalRequest);
       } catch (err) {
-        processQueue(err, null);
+        toast.error("Token refresh failed. Please login again.", err);
         useAuthStore.getState().logout?.();
-        toast?.error?.("Session expired. Please login again.");
-        setTimeout(() => (window.location.href = "/login"), 1000);
-        return Promise.reject(err);
+        return Promise.reject("Session expired");
       } finally {
         isRefreshing = false;
       }
     }
 
-    // 403
-    if (status === 403) {
-      toast?.error?.("You don’t have permission to perform this action.");
-    } else {
-      toast?.error?.(error.response?.data?.message || "Something went wrong");
-    }
-
-    return Promise.reject(error);
+    const errMsg = error.response?.data?.message || "Something went wrong";
+    toast.error(errMsg); // ✅ Show API/server errors to user
+    return Promise.reject(errMsg);
   }
 );
 
